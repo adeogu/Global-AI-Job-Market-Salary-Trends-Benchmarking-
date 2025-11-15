@@ -1,8 +1,0 @@
-{
-  "generated_at": "2025-11-15T08:46:43.314932",
-  "rows_input": 15000,
-  "rows_usa": 2794,
-  "rows_after_cleaning": 2794,
-  "salary_outliers": 93,
-  "num_salary_converted": 0
-}
