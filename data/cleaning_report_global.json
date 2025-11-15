@@ -1,8 +1,0 @@
-{
-  "generated_at": "2025-11-15T17:34:31.640914",
-  "rows_input": 15000,
-  "rows_after_duplicates": 15000,
-  "rows_after_missing_salary_drop": 15000,
-  "salary_outliers_flagged": 483,
-  "output_file": "data\\processed\\cleaned_jobs_global.csv"
-}
