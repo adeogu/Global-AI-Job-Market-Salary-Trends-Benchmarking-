@@ -5,9 +5,8 @@ from dash import Dash, dcc, html, Input, Output
 import pycountry
 
 df = pd.read_csv("data/new_jobsfr_global.csv")
-#color blind 
+
 CATEGORICAL = px.colors.qualitative.Safe
-SEQUENTIAL = px.colors.sequential.Viridis
 BLUES = px.colors.sequential.Blues
 
 def desc(text):
@@ -22,7 +21,7 @@ def desc(text):
         },
         **{"aria-label": text}
     )
-#convert country to iso 3 code
+
 def to_iso3(country):
     try:
         return pycountry.countries.lookup(country).alpha_3
@@ -99,37 +98,13 @@ app.layout = html.Div(
 
         html.Br(),
 
-
-        html.Div([
-            dcc.Graph(id="salary_dist"),
-            desc("Shows how salaries are distributed across roles. "
-                 "The violin shows spread; the boxplot shows median & quartiles. Salary in USD.")
-        ]),
-
-        html.Div([
-            dcc.Graph(id="exp_salary"),
-            desc("Salary differences across experience levels. Higher experience generally means higher salary.")
-        ]),
-
-        html.Div([
-            dcc.Graph(id="company_salary"),
-            desc("Average salary by company size: small, medium, large.")
-        ]),
-
-        html.Div([
-            dcc.Graph(id="education_salary"),
-            desc("Average salary by education level (Bachelor, Master, PhD). Shows how education relates to salary.")
-        ]),
-
-        html.Div([
-            dcc.Graph(id="industry_salary"),
-            desc("Treemap showing average salary across industries. Large blocks = more listings.")
-        ]),
-
-        html.Div([
-            dcc.Graph(id="location_map"),
-            desc("World map showing average AI salary by country (USD). Uses ISO-3 codes for reliability.")
-        ]),
+        html.Div([dcc.Graph(id="salary_dist")]),
+        html.Div([dcc.Graph(id="exp_salary")]),
+        html.Div([dcc.Graph(id="company_salary")]),
+        html.Div([dcc.Graph(id="education_salary")]),
+        html.Div([dcc.Graph(id="skill_salary")]),
+        html.Div([dcc.Graph(id="industry_salary")]),
+        html.Div([dcc.Graph(id="location_map")]),
     ]
 )
 
@@ -139,6 +114,7 @@ app.layout = html.Div(
         Output("exp_salary", "figure"),
         Output("company_salary", "figure"),
         Output("education_salary", "figure"),
+        Output("skill_salary", "figure"),
         Output("industry_salary", "figure"),
         Output("location_map", "figure"),
     ],
@@ -157,25 +133,19 @@ def update_graphs(exp, title, country):
         df2 = df2[df2["job_title"] == title]
     if country:
         df2 = df2[df2["company_location"] == country]
-#salary distribution
+
     fig1 = px.violin(
         df2, y="salary_usd", box=True, points="all",
         color_discrete_sequence=["#58A6FF"],
         title="Salary Distribution (USD)"
     )
-    fig1.update_yaxes(title="Salary (USD)")
-    fig1.update_layout(margin=dict(b=80))
-#salary by experience level
+
     fig2 = px.box(
         df2, x="experience_level", y="salary_usd",
         color="experience_level", color_discrete_sequence=CATEGORICAL,
         title="Salary by Experience Level"
     )
-    fig2.update_yaxes(title="Salary (USD)")
-    fig2.update_xaxes(title="Experience Level")
-    fig2.update_layout(margin=dict(b=80))
 
-    #salary by company size
     comp_avg = df2.groupby("company_size")["salary_usd"].mean().reset_index()
 
     fig3 = go.Figure()
@@ -185,44 +155,43 @@ def update_graphs(exp, title, country):
         marker=dict(size=14, color="#58A6FF"),
         line=dict(color="#58A6FF", width=3)
     ))
-    fig3.update_layout(
-        title=" Average Salary by Company Size",
-        xaxis_title="Salary (USD)",
-        yaxis_title="Company Size",
-        margin=dict(b=80)
-    )
+    fig3.update_layout(title="Average Salary by Company Size")
 
-    #salary by education level
     if "education_required" in df2.columns:
         edu_avg = df2.groupby("education_required")["salary_usd"].mean().reset_index()
-
         fig_edu = px.bar(
-            edu_avg,
-            x="education_required",
-            y="salary_usd",
-            color="salary_usd",
-            color_continuous_scale=BLUES,
-            title=" Average Salary by Education Level"
+            edu_avg, x="education_required", y="salary_usd",
+            color="salary_usd", color_continuous_scale=BLUES,
+            title="Average Salary by Education Level"
         )
-        fig_edu.update_xaxes(title="Education Level")
-        fig_edu.update_yaxes(title="Salary (USD)")
-        fig_edu.update_layout(margin=dict(b=80))
     else:
         fig_edu = go.Figure()
-        fig_edu.update_layout(
-            title=" Education Level Data Missing",
-            margin=dict(b=80)
+
+    # skills_count line graph
+    if "skills_count" in df2.columns:
+        skill_avg = (
+            df2.groupby("skills_count")["salary_usd"]
+            .mean()
+            .reset_index()
+            .sort_values("skills_count")
         )
 
-    #salary by industry
+        fig_skill = px.line(
+            skill_avg,
+            x="skills_count",
+            y="salary_usd",
+            markers=True,
+            title="Average Salary by Skills Count"
+        )
+    else:
+        fig_skill = go.Figure()
+
     fig4 = px.treemap(
         df2, path=["industry"], values="salary_usd",
         color="salary_usd", color_continuous_scale=BLUES,
-        title=" Salary by Industry"
+        title="Salary by Industry"
     )
-    fig4.update_layout(margin=dict(b=80))
 
-    #salary by location
     country_stats = df2.groupby("company_location").agg(
         avg_salary=("salary_usd", "mean")
     ).reset_index()
@@ -235,17 +204,12 @@ def update_graphs(exp, title, country):
         locations="iso_alpha",
         color="avg_salary",
         hover_name="company_location",
-        hover_data={
-            "avg_salary": ":,.0f",
-            "iso_alpha": False
-        },
         color_continuous_scale=BLUES,
-        title=" Average AI Salary by Country (USD)"
+        title="Average AI Salary by Country (USD)"
     )
-    fig6.update_coloraxes(colorbar_title="Avg Salary (USD)")
-    fig6.update_layout(margin=dict(b=80))
 
-    return fig1, fig2, fig3, fig_edu, fig4, fig6
+    return fig1, fig2, fig3, fig_edu, fig_skill, fig4, fig6
+
 
 if __name__ == "__main__":
     app.run(debug=True)
