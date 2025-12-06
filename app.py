@@ -139,6 +139,7 @@ app.layout = html.Div(
 
         html.Div([dcc.Graph(id="salary_dist")]),
         html.Div([dcc.Graph(id="exp_salary")]),
+        html.Div([dcc.Graph(id="years_experience_salary")]),
         html.Div([dcc.Graph(id="company_salary")]),
         html.Div([dcc.Graph(id="education_salary")]),
         html.Div([dcc.Graph(id="skill_salary")]),
@@ -152,6 +153,7 @@ app.layout = html.Div(
     [
         Output("salary_dist", "figure"),
         Output("exp_salary", "figure"),
+        Output("years_experience_salary", "figure"),
         Output("company_salary", "figure"),
         Output("education_salary", "figure"),
         Output("skill_salary", "figure"),
@@ -198,6 +200,33 @@ def update_graphs(exp, title, country):
         title="Salary by Experience Level"
     )
     fig2 = style_fig(fig2)
+
+    # Average salary by years of experience
+    df_years_avg = (
+        df2.groupby("years_experience", as_index=False)
+           .agg(avg_salary_usd=("salary_usd", "mean"))
+    )
+
+    fig_years = px.scatter(
+        df_years_avg,
+        x="years_experience",
+        y="avg_salary_usd",
+        trendline="ols",
+        color_discrete_sequence=["#58A6FF"],
+        title="Average Salary vs. Years of Experience ONLY USE WITH ALL EXPERIENCE",
+        labels={
+            "years_experience": "Years of Experience",
+            "avg_salary_usd": "Average Salary (USD)"
+        },
+        hover_data={
+            "years_experience": ":.1f",
+            "avg_salary_usd": ":$,.0f"
+        }
+    )
+
+    fig_years.update_traces(marker=dict(size=8, opacity=0.7), selector=dict(mode="markers"))
+    fig_years.update_traces(line=dict(color="#FF6B35", width=3), selector=dict(mode="lines"))
+    fig_years = style_fig(fig_years)
 
     # Company size 
     comp_avg = (
@@ -272,44 +301,40 @@ def update_graphs(exp, title, country):
 
     # 6) Industry
     if "industry" in df2.columns and not df2["industry"].dropna().empty:
-        industry_avg = (
+        industry_stats = (
             df2.groupby("industry")["salary_usd"]
-            .mean()
+            .agg(["mean", "std", "count"])
             .reset_index()
-            .sort_values("salary_usd")
+            .sort_values("mean")
+        )
+        industry_stats.columns = ["industry", "mean_salary", "std_salary", "n"]
+
+        # 95% confidence interval of the mean 
+        industry_stats["ci_salary"] = (
+            1.96 * industry_stats["std_salary"] / (industry_stats["n"] ** 0.5)
+        ).fillna(0)
+
+        fig4 = px.bar(
+            industry_stats,
+            x="mean_salary",
+            y="industry",
+            error_x="ci_salary",
+            orientation="h",
+            color="mean_salary",
+            color_continuous_scale=BLUES,
+            title="Average Salary by Industry (95% CI of Mean)",
+            labels={
+                "industry": "Industry",
+                "mean_salary": "Average Salary (USD)",
+                "ci_salary": "95% CI",
+            },
         )
 
-        fig4 = go.Figure()
-
-        # "sticks"
-        for _, row in industry_avg.iterrows():
-            fig4.add_trace(go.Scatter(
-                x=[0, row["salary_usd"]],
-                y=[row["industry"], row["industry"]],
-                mode="lines",
-                line=dict(color="#58A6FF", width=2),
-                showlegend=False
-            ))
-
-        # "lollipop heads"
-        fig4.add_trace(go.Scatter(
-            x=industry_avg["salary_usd"],
-            y=industry_avg["industry"],
-            mode="markers",
-            marker=dict(
-                size=12,
-                color=industry_avg["salary_usd"],
-                colorscale="Blues",
-                line=dict(width=1, color="white")
-            ),
-            showlegend=False
-        ))
-
         fig4.update_layout(
-            title="Average Salary by Industry",
             xaxis_title="Average Salary (USD)",
             yaxis_title="Industry",
         )
+        fig4.update_xaxes(tickformat="$,.0f")
         fig4 = style_fig(fig4)
     else:
         fig4 = style_fig(go.Figure())
@@ -349,7 +374,7 @@ def update_graphs(exp, title, country):
     )
     fig6 = style_fig(fig6)
 
-    return fig1, fig2, fig3, fig_edu, fig_skill, fig4, fig6
+    return fig1, fig2, fig_years, fig3, fig_edu, fig_skill, fig4, fig6
 
 
 if __name__ == "__main__":
